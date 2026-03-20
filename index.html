@@ -3,84 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Private Cinema</title>
-    <script src="https://unpkg.com"></script>
+    <title>VK Watch Party</title>
+    <!-- Используем надежную CDN для библиотеки связи -->
+    <script src="https://cdn.jsdelivr.net"></script>
     <style>
-        body { background: #0f0f0f; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
-        .box { background: #1e1e1e; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; }
-        iframe { width: 100%; max-width: 800px; height: 450px; border-radius: 8px; border: none; background: #000; }
-        input { width: 70%; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #2b2b2b; color: white; }
-        button { padding: 10px 15px; border-radius: 5px; border: none; background: #0077ff; color: white; cursor: pointer; }
-        #myId { font-weight: bold; color: #00ff88; cursor: pointer; }
+        body { background: #121212; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #1e1e1e; border-radius: 15px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; }
+        input { width: 80%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #252525; color: #fff; margin: 10px 0; }
+        button { background: #0077ff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        iframe { width: 100%; height: 300px; border-radius: 10px; margin-top: 15px; background: #000; border: none; }
+        #myId { color: #00ff88; font-weight: bold; word-break: break-all; cursor: pointer; display: block; margin: 10px 0; }
     </style>
 </head>
 <body>
 
-    <div class="box">
-        <p>Ваш ID (нажми, чтобы скопировать): <span id="myId">Подключение...</span></p>
-        <input type="text" id="peerIdInput" placeholder="ID друга для подключения">
-        <button onclick="connectToPeer()">Подключиться к другу</button>
+    <div class="card">
+        <h3>1. Ваше устройство</h3>
+        <p>Ваш ID (нажми, чтобы скопировать):</p>
+        <span id="myId">Инициализация...</span>
     </div>
 
-    <div class="box">
-        <input type="text" id="videoUrl" placeholder="Вставьте ссылку из ВК (Экспорт -> src)">
-        <button onclick="sendVideo()">Открыть видео у всех</button>
+    <div class="card">
+        <h3>2. Подключение</h3>
+        <input type="text" id="peerIdInput" placeholder="Введите ID друга">
+        <button onclick="connectToPeer()">Соединить устройства</button>
     </div>
 
-    <div id="playerContainer">
-        <p>Здесь появится плеер после вставки ссылки</p>
+    <div class="card">
+        <h3>3. Видео</h3>
+        <input type="text" id="videoUrl" placeholder="Вставьте ссылку src из ВК">
+        <button onclick="sendVideo()">Запустить у всех</button>
+        <div id="playerContainer"></div>
     </div>
 
-   <script>
-    let peer = new Peer(); 
-    let conn;
+    <script>
+        let peer = new Peer();
+        let conn;
 
-    // Отображаем ваш ID для подключения
-    peer.on('open', (id) => {
-        document.getElementById('myId').innerText = id;
-    });
-
-    // Принимаем входящее соединение (например, с айфона на ПК)
-    peer.on('connection', (connection) => {
-        conn = connection;
-        setupSync();
-    });
-
-    // Функция подключения к другу
-    function connectToPeer() {
-        const remoteId = document.getElementById('peerIdInput').value;
-        conn = peer.connect(remoteId);
-        setupSync();
-    }
-
-    function setupSync() {
-        conn.on('data', (data) => {
-            if (data.type === 'VIDEO_URL') {
-                renderPlayer(data.url);
-            }
+        // Получаем ID от сервера PeerJS
+        peer.on('open', (id) => {
+            document.getElementById('myId').innerText = id;
         });
-        alert("Связь установлена!");
-    }
 
-    // Отправка видео всем участникам
-    function sendVideo() {
-        let input = document.getElementById('videoUrl').value;
-        let finalUrl = input;
+        // Копирование по клику
+        document.getElementById('myId').onclick = function() {
+            navigator.clipboard.writeText(this.innerText);
+            alert("ID скопирован!");
+        };
 
-        // Если вставили весь код iframe, вырезаем только ссылку src
-        if (input.includes('src="')) {
-            finalUrl = input.split('src="')[1].split('"')[0];
+        // Слушаем входящие подключения
+        peer.on('connection', (connection) => {
+            conn = connection;
+            handleData();
+            alert("Друг подключился!");
+        });
+
+        // Подключаемся к другу сами
+        function connectToPeer() {
+            const remoteId = document.getElementById('peerIdInput').value;
+            if (!remoteId) return alert("Введите ID!");
+            conn = peer.connect(remoteId);
+            handleData();
+            alert("Запрос на соединение отправлен!");
         }
 
-        renderPlayer(finalUrl);
-        if (conn) conn.send({ type: 'VIDEO_URL', url: finalUrl });
-    }
+        function handleData() {
+            conn.on('data', (data) => {
+                if (data.type === 'VIDEO') {
+                    showVideo(data.url);
+                }
+            });
+        }
 
-    function renderPlayer(url) {
-        document.getElementById('playerContainer').innerHTML = 
-            `<iframe src="${url}" allow="autoplay; encrypted-media" allowfullscreen 
-             style="width:100%; height:450px; border:none;"></iframe>`;
-    }
-</script>
+        function sendVideo() {
+            const url = document.getElementById('videoUrl').value;
+            if (!url) return;
+            showVideo(url);
+            if (conn && conn.open) {
+                conn.send({ type: 'VIDEO', url: url });
+            }
+        }
+
+        function showVideo(url) {
+            // Очистка ссылки на случай, если вставили весь <iframe>
+            let cleanUrl = url;
+            if (url.includes('src="')) {
+                cleanUrl = url.split('src="')[1].split('"')[0];
+            }
+            document.getElementById('playerContainer').innerHTML = 
+                `<iframe src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        }
+    </script>
 </body>
 </html>
