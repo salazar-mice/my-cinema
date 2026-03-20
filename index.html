@@ -3,106 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Together FIX</title>
+    <title>VK Sync Fixed</title>
     <style>
         body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
         .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 450px; margin: 0 auto 15px; }
-        input { width: 90%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
+        input { width: 90%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; -webkit-appearance: none; }
         .secondary { background: #333; margin-top: 10px; }
-        iframe { width: 100%; height: 350px; border-radius: 12px; border: none; background: #000; margin-top: 15px; }
-        .badge { font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #00ff88; color: #000; font-weight: bold; }
+        iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 20px; }
+        .badge { font-size: 12px; padding: 5px 10px; border-radius: 5px; background: #00ff88; color: #000; font-weight: bold; display: inline-block; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="setup" class="card">
+    <div id="setupScreen" class="card">
         <h2>VK Together</h2>
-        <p style="font-size:14px; color:#888;">Выберите вашу роль:</p>
-        <button onclick="setRole('leader')">Я ЛИДЕР (создать)</button>
-        <button class="secondary" onclick="setRole('viewer')">Я ЗРИТЕЛЬ (смотреть)</button>
+        <button onclick="chooseRole('leader')">Я ЛИДЕР</button>
+        <button class="secondary" onclick="chooseRole('viewer')">Я ЗРИТЕЛЬ</button>
     </div>
 
-    <div id="main" class="card" style="display:none;">
-        <div id="statusTag" class="badge">ЛИДЕР</div>
+    <div id="mainApp" class="card" style="display:none;">
+        <div id="statusLabel" class="badge">ЛИДЕР</div>
         
-        <div id="leaderSection">
-            <input type="text" id="urlInput" placeholder="Вставьте код iframe из ВК">
-            <button onclick="generateLink()">ЗАПУСТИТЬ У ВСЕХ</button>
-            <p id="shareText" style="font-size:11px; color:#aaa; margin-top:10px; display:none;">Скопируйте ссылку из браузера и отправьте другу!</p>
+        <div id="leaderUI">
+            <input type="text" id="videoInput" placeholder="Вставьте код iframe из ВК">
+            <button onclick="startVideo()">ОТКРЫТЬ У ВСЕХ</button>
         </div>
 
-        <div id="viewerSection" style="display:none;">
-            <p style="font-size:14px;">Ожидание видео от лидера...</p>
-            <button class="secondary" onclick="claimControl()">ЗАПРОСИТЬ УПРАВЛЕНИЕ</button>
+        <div id="viewerUI" style="display:none;">
+            <p>Ожидание ссылки от лидера...</p>
+            <button class="secondary" onclick="takeControl()">СТАТЬ ЛИДЕРОМ (Код: 1111)</button>
         </div>
     </div>
 
-    <div id="playerBox"></div>
+    <div id="playerArea"></div>
 
     <script>
-        const params = new URLSearchParams(window.location.search);
-        let role = params.get('role') || 'none';
-        let video = params.get('v');
+        const urlParams = new URLSearchParams(window.location.search);
+        let myRole = urlParams.get('role') || 'none';
+        let vSrc = urlParams.get('v');
 
-        // 1. Проверяем состояние при загрузке
-        if (role !== 'none' || video) {
-            showInterface(role);
+        // Инициализация при загрузке
+        if (myRole !== 'none' || vSrc) {
+            updateUI(myRole);
         }
-        if (video) {
-            render(decodeURIComponent(video));
-        }
-
-        function setRole(newRole) {
-            role = newRole;
-            showInterface(role);
+        if (vSrc) {
+            drawPlayer(decodeURIComponent(vSrc));
         }
 
-        function showInterface(currentRole) {
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('main').style.display = 'block';
+        function chooseRole(r) {
+            myRole = r;
+            updateUI(r);
+        }
+
+        function updateUI(r) {
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
             
-            const isLeader = (currentRole === 'leader');
-            document.getElementById('statusTag').innerText = isLeader ? "ЛИДЕР" : "ЗРИТЕЛЬ";
-            document.getElementById('statusTag').style.background = isLeader ? "#00ff88" : "#ff9500";
+            const isL = (r === 'leader');
+            document.getElementById('statusLabel').innerText = isL ? "ЛИДЕР" : "ЗРИТЕЛЬ";
+            document.getElementById('statusLabel').style.background = isL ? "#00ff88" : "#ff9500";
             
-            document.getElementById('leaderSection').style.display = isLeader ? 'block' : 'none';
-            document.getElementById('viewerSection').style.display = isLeader ? 'none' : 'block';
+            document.getElementById('leaderUI').style.display = isL ? 'block' : 'none';
+            document.getElementById('viewerUI').style.display = isL ? 'none' : 'block';
         }
 
-        function generateLink() {
-            const input = document.getElementById('urlInput').value;
-            if (!input) return alert("Вставьте ссылку!");
+        function startVideo() {
+            let raw = document.getElementById('videoInput').value;
+            if (!raw) return alert("Пусто!");
 
-            // Вырезаем чистый URL из iframe
-            let finalUrl = input;
-            if (input.includes('src="')) {
-                finalUrl = input.split('src="').split('"');
+            let clean = raw;
+            // Безопасный поиск ссылки внутри кавычек src="..."
+            if (raw.indexOf('src="') !== -1) {
+                let start = raw.indexOf('src="') + 5;
+                let end = raw.indexOf('"', start);
+                clean = raw.substring(start, end);
             }
-            if (!finalUrl.includes('https:')) finalUrl = 'https:' + finalUrl;
 
-            // Генерируем ссылку для всех
-            const newUrl = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(finalUrl) + '&role=viewer';
-            
-            // Переходим по ней
-            window.location.href = newUrl;
+            // Исправляем протокол
+            if (clean.indexOf('http') === -1) {
+                clean = 'https:' + clean;
+            }
+
+            // Формируем новую ссылку и ПЕРЕХОДИМ по ней
+            const finalLink = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(clean) + '&role=viewer';
+            window.location.href = finalLink;
         }
 
-        function claimControl() {
-            let pass = prompt("Введите пароль для управления (по умолчанию 1111):");
-            if (pass === "1111") {
-                const currentVideo = params.get('v') || '';
-                window.location.href = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(currentVideo) + '&role=leader';
+        function takeControl() {
+            let p = prompt("Введите пароль:");
+            if (p === "1111") {
+                let currentV = urlParams.get('v') || '';
+                window.location.href = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(currentV) + '&role=leader';
             }
         }
 
-        function render(url) {
-            // Добавляем параметры для ВК чтобы не было черного экрана
-            let videoSrc = url;
-            if (!videoSrc.includes('autoplay')) videoSrc += '&autoplay=1';
-            
-            document.getElementById('playerBox').innerHTML = 
-                `<iframe src="${videoSrc}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        function drawPlayer(url) {
+            // Добавляем автоплей и убираем лишние пробелы
+            let src = url.trim();
+            if (src.indexOf('autoplay') === -1) {
+                src += (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
+            }
+            document.getElementById('playerArea').innerHTML = '<iframe src="' + src + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
         }
     </script>
 </body>
