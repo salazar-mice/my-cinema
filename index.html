@@ -3,47 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Together Simple</title>
+    <title>VK Party Code</title>
     <style>
         body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 15px; margin: 0; }
-        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 450px; margin: 0 auto 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; outline: none; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 90%; font-weight: bold; cursor: pointer; margin-top: 5px; -webkit-appearance: none; }
+        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 10px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 8px 0; font-size: 16px; outline: none; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 90%; font-weight: bold; cursor: pointer; margin-top: 5px; }
         .secondary { background: #333; margin-top: 10px; }
         iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 15px; }
-        #userDisplay { font-size: 13px; color: #00ff88; margin-bottom: 10px; font-weight: bold; }
-        .badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #ff9500; color: #000; font-weight: bold; display: inline-block; margin-bottom: 10px; }
+        #roomBadge { font-size: 18px; color: #00ff88; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
+        .badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #ff9500; color: #000; font-weight: bold; display: inline-block; }
     </style>
 </head>
 <body>
 
-    <!-- ЭКРАН 1: ВВОД НИКА -->
-    <div id="regScreen" class="card">
-        <h2>VK Sync</h2>
-        <p style="color: #888; font-size: 14px;">Введите ваше имя для входа:</p>
-        <input type="text" id="nickname" placeholder="Ваш никнейм">
-        <button onclick="login()">ВОЙТИ</button>
+    <!-- ЭКРАН 1: ВХОД -->
+    <div id="loginScreen" class="card">
+        <h2>VK Together</h2>
+        <input type="text" id="nickInput" placeholder="Ваш ник">
+        <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+        
+        <button onclick="initSession('leader')">СОЗДАТЬ КОМНАТУ</button>
+        
+        <p style="color: #666; font-size: 14px;">ИЛИ</p>
+        
+        <input type="text" id="codeInput" placeholder="Код комнаты (напр. 7a2f)">
+        <button class="secondary" onclick="initSession('viewer')">ВОЙТИ ПО КОДУ</button>
     </div>
 
-    <!-- ЭКРАН 2: ВЫБОР РОЛИ (только если зашли на главную) -->
-    <div id="roleScreen" class="card" style="display:none;">
-        <h2>Вы кто?</h2>
-        <button onclick="startSession('leader')">СОЗДАТЬ КОМНАТУ</button>
-        <button class="secondary" onclick="startSession('viewer')">СМОТРЕТЬ С ДРУГОМ</button>
-    </div>
-
-    <!-- ЭКРАН 3: ПРИЛОЖЕНИЕ -->
-    <div id="mainApp" class="card" style="display:none;">
-        <div id="userDisplay"></div>
+    <!-- ЭКРАН 2: КОМНАТА -->
+    <div id="roomScreen" class="card" style="display:none;">
         <div id="statusTag" class="badge">ЗРИТЕЛЬ</div>
+        <p id="welcomeMsg" style="font-size: 14px; margin-bottom: 5px;"></p>
+        <div id="roomBadge">КОД: <span id="displayCode">----</span></div>
         
         <div id="leaderUI" style="display:none;">
             <input type="text" id="videoInput" placeholder="Вставьте код iframe из ВК">
-            <button onclick="generateShare()">ОТКРЫТЬ ВИДЕО У ВСЕХ</button>
+            <button onclick="updateVideo()">ЗАПУСТИТЬ У ВСЕХ</button>
         </div>
 
         <div id="viewerUI">
-            <p id="waitText">Ожидание ссылки от Лидера...</p>
+            <p id="waitText" style="font-size: 13px; color: #888;">Ожидание видео от Лидера...</p>
             <button class="secondary" onclick="claimControl()">СТАТЬ ЛИДЕРОМ (1111)</button>
         </div>
     </div>
@@ -51,42 +51,33 @@
     <div id="playerArea"></div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        let myNick = urlParams.get('nick') || "";
-        let myRole = urlParams.get('role') || "";
-        let vSrc = urlParams.get('v') || "";
+        let myNick = "";
+        let myRole = "";
+        let currentRoom = "";
+        let lastVideo = "";
 
-        // Если ник и роль уже есть в ссылке — сразу открываем приложение
-        window.onload = function() {
-            if (myNick && (myRole || vSrc)) {
-                showApp();
-            }
-        };
+        function initSession(role) {
+            myNick = document.getElementById('nickInput').value.trim();
+            if (!myNick) return alert("Введите ник!");
 
-        function login() {
-            myNick = document.getElementById('nickname').value.trim();
-            if (!myNick) return alert("Ник не может быть пустым!");
-            
-            document.getElementById('regScreen').style.display = 'none';
-            
-            if (vSrc) {
-                myRole = 'viewer';
-                showApp();
+            if (role === 'leader') {
+                currentRoom = Math.random().toString(36).substring(7, 11); // Генерируем 4 знака
+                myRole = 'leader';
+                localStorage.setItem('room_' + currentRoom, JSON.stringify({ video: "", leader: myNick }));
             } else {
-                document.getElementById('roleScreen').style.display = 'block';
+                currentRoom = document.getElementById('codeInput').value.trim().toLowerCase();
+                if (!currentRoom) return alert("Введите код комнаты!");
+                myRole = 'viewer';
             }
+
+            showRoom();
         }
 
-        function startSession(role) {
-            myRole = role;
-            document.getElementById('roleScreen').style.display = 'none';
-            showApp();
-        }
-
-        function showApp() {
-            document.getElementById('regScreen').style.display = 'none';
-            document.getElementById('mainApp').style.display = 'block';
-            document.getElementById('userDisplay').innerText = "Привет, " + myNick + "!";
+        function showRoom() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('roomScreen').style.display = 'block';
+            document.getElementById('displayCode').innerText = currentRoom;
+            document.getElementById('welcomeMsg').innerText = "Привет, " + myNick;
             
             const isL = (myRole === 'leader');
             document.getElementById('statusTag').innerText = isL ? "ЛИДЕР" : "ЗРИТЕЛЬ";
@@ -94,12 +85,11 @@
             document.getElementById('leaderUI').style.display = isL ? 'block' : 'none';
             document.getElementById('viewerUI').style.display = isL ? 'none' : 'block';
 
-            if (vSrc) {
-                drawPlayer(decodeURIComponent(vSrc));
-            }
+            // Запускаем цикл проверки обновлений (раз в 3 секунды)
+            setInterval(syncRoom, 3000);
         }
 
-        function generateShare() {
+        function updateVideo() {
             let raw = document.getElementById('videoInput').value;
             let clean = raw;
             if (raw.indexOf('src="') !== -1) {
@@ -107,27 +97,36 @@
                 let end = raw.indexOf('"', start);
                 clean = raw.substring(start, end);
             }
-            if (clean.indexOf('http') === -1) clean = 'https:' + clean;
+            if (clean && clean.indexOf('http') === -1) clean = 'https:' + clean;
 
-            // Формируем ссылку для Зрителя (без его ника, чтобы он ввел свой)
-            const finalLink = window.location.origin + window.location.pathname + 
-                              '?v=' + encodeURIComponent(clean) + '&role=viewer';
+            // Сохраняем в "базу"
+            const data = { video: clean, leader: myNick };
+            localStorage.setItem('room_' + currentRoom, JSON.stringify(data));
+            render(clean);
+        }
+
+        function syncRoom() {
+            const rawData = localStorage.getItem('room_' + currentRoom);
+            if (!rawData) return;
             
-            alert("ВИДЕО ЗАГРУЖЕНО!\n\nТеперь скопируйте ссылку из адресной строки вашего браузера и отправьте её другу.");
-            
-            // Обновляем текущую страницу для лидера
-            window.location.href = window.location.origin + window.location.pathname + 
-                                  '?v=' + encodeURIComponent(clean) + '&role=leader&nick=' + encodeURIComponent(myNick);
+            const data = JSON.parse(rawData);
+            if (data.video && data.video !== lastVideo) {
+                lastVideo = data.video;
+                render(data.video);
+            }
         }
 
         function claimControl() {
             if (prompt("Введите пароль:") === "1111") {
-                window.location.href = window.location.origin + window.location.pathname + 
-                                      '?v=' + encodeURIComponent(vSrc) + '&role=leader&nick=' + encodeURIComponent(myNick);
+                myRole = 'leader';
+                const data = JSON.parse(localStorage.getItem('room_' + currentRoom));
+                data.leader = myNick;
+                localStorage.setItem('room_' + currentRoom, JSON.stringify(data));
+                showRoom();
             }
         }
 
-        function drawPlayer(url) {
+        function render(url) {
             let src = url;
             if (src.indexOf('autoplay') === -1) src += (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
             document.getElementById('playerArea').innerHTML = '<iframe src="' + src + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
