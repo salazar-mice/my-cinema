@@ -3,150 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Watch Party</title>
- <!-- Подключаем сверхнадежную библиотеку связи -->
-<script src="https://cdn.pubnub.com"></script>
-<script>
-    // Создаем подключение (Бесплатные ключи для теста)
-    const pubnub = new PubNub({
-        publishKey: 'pub-c-46764724-4d8e-4a6c-9418-8f5509930f40',
-        subscribeKey: 'sub-c-10143894-3580-4547-9759-45664197368d',
-        userId: "user_" + Math.random().toString(36).substring(7)
-    });
-
-    // Комната для вас и друга (придумайте любое слово)
-    const channel = 'my_private_cinema_room_123'; 
-
-    pubnub.subscribe({ channels: [channel] });
-
-    pubnub.addListener({
-        message: function(event) {
-            if (event.message.type === 'VIDEO') {
-                showVideo(event.message.url);
-            }
-        }
-    });
-
-    function sendVideo() {
-        const url = document.getElementById('videoUrl').value;
-        if (!url) return;
-        
-        showVideo(url); // Открываем у себя
-        
-        pubnub.publish({
-            channel: channel,
-            message: { type: 'VIDEO', url: url }
-        });
-    }
-
-    function showVideo(url) {
-        let cleanUrl = url;
-        if (url.includes('src="')) {
-            cleanUrl = url.split('src="')[1].split('"')[0];
-        }
-        document.getElementById('playerContainer').innerHTML = 
-            `<iframe src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen 
-             style="width:100%; height:450px; border:none; margin-top:20px;"></iframe>`;
-    }
-
-    // Вместо ID теперь просто пишем статус
-    document.getElementById('myId').innerText = "СВЯЗЬ АКТИВНА (Комната: " + channel + ")";
-</script>
+    <title>VK Watch Together</title>
+    <!-- Библиотека связи, стабильно работающая в РФ -->
+    <script src="https://cdn.pubnub.com"></script>
     <style>
-        body { background: #121212; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
-        .card { background: #1e1e1e; border-radius: 15px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; }
-        input { width: 80%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #252525; color: #fff; margin: 10px 0; }
-        button { background: #0077ff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        iframe { width: 100%; height: 300px; border-radius: 10px; margin-top: 15px; background: #000; border: none; }
-        #myId { color: #00ff88; font-weight: bold; word-break: break-all; cursor: pointer; display: block; margin: 10px 0; }
+        body { background: #0f0f0f; color: #fff; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #1a1a1a; border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #0077ff; margin-top: 0; }
+        input { width: 90%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #252525; color: #fff; margin: 10px 0; font-size: 14px; }
+        button { background: #0077ff; color: white; border: none; padding: 14px 25px; border-radius: 10px; font-weight: bold; cursor: pointer; width: 95%; transition: 0.2s; }
+        button:active { background: #0055cc; transform: scale(0.98); }
+        .status { color: #00ff88; font-size: 14px; margin-bottom: 10px; font-weight: bold; }
+        #playerContainer { margin-top: 20px; width: 100%; }
+        iframe { width: 100%; height: 300px; border-radius: 12px; border: none; background: #000; }
+        .hint { font-size: 12px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h3>1. Ваше устройство</h3>
-        <p>Ваш ID (нажми, чтобы скопировать):</p>
-        <span id="myId">Инициализация...</span>
+        <h2>VK Together</h2>
+        <div id="status" class="status">ПОДКЛЮЧЕНИЕ...</div>
+        <p class="hint">Откройте этот сайт на ПК и iPhone одновременно.</p>
     </div>
 
     <div class="card">
-        <h3>2. Подключение</h3>
-        <input type="text" id="peerIdInput" placeholder="Введите ID друга">
-        <button onclick="connectToPeer()">Соединить устройства</button>
+        <input type="text" id="videoUrl" placeholder="Вставьте код iframe или ссылку из ВК">
+        <button onclick="sendVideo()">ЗАПУСТИТЬ ВИДЕО У ВСЕХ</button>
+        <p class="hint">В ВК: Поделиться -> Экспортировать -> Копировать код</p>
     </div>
 
-    <div class="card">
-        <h3>3. Видео</h3>
-        <input type="text" id="videoUrl" placeholder="Вставьте ссылку src из ВК">
-        <button onclick="sendVideo()">Запустить у всех</button>
-        <div id="playerContainer"></div>
-    </div>
+    <div id="playerContainer"></div>
 
     <script>
-  // Используем стандартные настройки с принудительным включением отладки
-let peer = new Peer(null, {
-    debug: 2,
-    config: {
-        'iceServers': [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-    }
-});
-
-// Добавим обработку ошибки, чтобы понять, в чем дело
-peer.on('error', (err) => {
-    console.error(err);
-    document.getElementById('myId').innerText = "Ошибка сети: " + err.type;
-});
-
-        // Копирование по клику
-        document.getElementById('myId').onclick = function() {
-            navigator.clipboard.writeText(this.innerText);
-            alert("ID скопирован!");
-        };
-
-        // Слушаем входящие подключения
-        peer.on('connection', (connection) => {
-            conn = connection;
-            handleData();
-            alert("Друг подключился!");
+        // Инициализация связи
+        const pubnub = new PubNub({
+            publishKey: 'pub-c-46764724-4d8e-4a6c-9418-8f5509930f40',
+            subscribeKey: 'sub-c-10143894-3580-4547-9759-45664197368d',
+            userId: "user_" + Math.random().toString(36).substring(7)
         });
 
-        // Подключаемся к другу сами
-        function connectToPeer() {
-            const remoteId = document.getElementById('peerIdInput').value;
-            if (!remoteId) return alert("Введите ID!");
-            conn = peer.connect(remoteId);
-            handleData();
-            alert("Запрос на соединение отправлен!");
-        }
+        // Название вашей секретной комнаты (можно изменить на свое)
+        const channelName = 'my_private_vk_room_999';
 
-        function handleData() {
-            conn.on('data', (data) => {
-                if (data.type === 'VIDEO') {
-                    showVideo(data.url);
+        // Подписываемся на сообщения
+        pubnub.subscribe({ channels: [channelName] });
+
+        pubnub.addListener({
+            status: function(s) {
+                if (s.category === "PNConnectedCategory") {
+                    document.getElementById('status').innerText = "СВЯЗЬ АКТИВНА ✅";
                 }
+            },
+            message: function(event) {
+                if (event.message.type === 'VIDEO') {
+                    renderPlayer(event.message.url);
+                }
+            }
+        });
+
+        function sendVideo() {
+            const rawUrl = document.getElementById('videoUrl').value;
+            if (!rawUrl) return alert("Вставьте ссылку!");
+
+            // Очищаем ссылку, если вставили весь iframe
+            let finalUrl = rawUrl;
+            if (rawUrl.includes('src="')) {
+                finalUrl = rawUrl.split('src="')[1].split('"')[0];
+            }
+
+            // Отправляем всем (включая себя)
+            pubnub.publish({
+                channel: channelName,
+                message: { type: 'VIDEO', url: finalUrl }
             });
         }
 
-        function sendVideo() {
-            const url = document.getElementById('videoUrl').value;
-            if (!url) return;
-            showVideo(url);
-            if (conn && conn.open) {
-                conn.send({ type: 'VIDEO', url: url });
-            }
-        }
-
-        function showVideo(url) {
-            // Очистка ссылки на случай, если вставили весь <iframe>
-            let cleanUrl = url;
-            if (url.includes('src="')) {
-                cleanUrl = url.split('src="')[1].split('"')[0];
-            }
-            document.getElementById('playerContainer').innerHTML = 
-                `<iframe src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        function renderPlayer(url) {
+            const container = document.getElementById('playerContainer');
+            container.innerHTML = `<iframe src="${url}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
         }
     </script>
 </body>
