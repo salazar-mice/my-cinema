@@ -37,13 +37,22 @@
     </div>
 
     <script>
-        let peer = new Peer();
-        let conn;
+  // Используем стандартные настройки с принудительным включением отладки
+let peer = new Peer(null, {
+    debug: 2,
+    config: {
+        'iceServers': [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    }
+});
 
-        // Получаем ID от сервера PeerJS
-        peer.on('open', (id) => {
-            document.getElementById('myId').innerText = id;
-        });
+// Добавим обработку ошибки, чтобы понять, в чем дело
+peer.on('error', (err) => {
+    console.error(err);
+    document.getElementById('myId').innerText = "Ошибка сети: " + err.type;
+});
 
         // Копирование по клику
         document.getElementById('myId').onclick = function() {
