@@ -4,8 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VK Sync Together</title>
-    <!-- Подключаем Supabase. Если не сработает, в консоли будет ошибка -->
-    <script src="https://cdn.jsdelivr.net"></script>
+<!-- Пробуем альтернативный стабильный источник библиотеки -->
+<script src="https://unpkg.com"></script>
+
+<script>
+    const SUPABASE_URL = 'https://dbpchlksyptecgmujlio.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGNobGtzeXB0ZWNnbXVqbGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDYzODQsImV4cCI6MjA4OTU4MjM4NH0.OtaUIt2G9IOU_bK1bvTWRaySD3EPpIfu3ikic3aHndE';
+    
+    let supabase;
+
+    // Пытаемся инициализировать библиотеку из разных возможных глобальных имен
+    function initSupabase() {
+        const lib = window.supabase || window['@supabase/supabase-js'];
+        if (lib && lib.createClient) {
+            supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+            return true;
+        }
+        return false;
+    }
+
+    window.onload = () => {
+        if (!initSupabase()) {
+            // Если через 2 секунды все еще не загрузилось, пробуем еще раз
+            setTimeout(() => {
+                if (!initSupabase()) {
+                    alert("Ошибка: Библиотека все еще не доступна. Попробуйте сменить сеть (например, с Wi-Fi на мобильный интернет).");
+                }
+            }, 2000);
+        }
+    };
+
+    // Остальной код функций (startSession, updateVideo и т.д.) остается прежним
+</script>
     <style>
         body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
         .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 0 auto 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
