@@ -3,134 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Party Code</title>
+    <title>VK Together Sync</title>
+    <!-- Библиотека Supabase -->
+    <script src="https://cdn.jsdelivr.net"></script>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 15px; margin: 0; }
-        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 10px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 8px 0; font-size: 16px; outline: none; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 90%; font-weight: bold; cursor: pointer; margin-top: 5px; }
+        body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 0 auto 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; outline: none; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 95%; font-weight: bold; cursor: pointer; margin-top: 5px; }
         .secondary { background: #333; margin-top: 10px; }
-        iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 15px; }
-        #roomBadge { font-size: 18px; color: #00ff88; font-weight: bold; letter-spacing: 2px; margin: 10px 0; }
-        .badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #ff9500; color: #000; font-weight: bold; display: inline-block; }
+        iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 20px; }
+        #roomCodeDisplay { font-size: 22px; color: #00ff88; font-weight: bold; margin: 10px 0; letter-spacing: 2px; }
+        #userList { font-size: 12px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <!-- ЭКРАН 1: ВХОД -->
-    <div id="loginScreen" class="card">
+    <div id="auth" class="card">
         <h2>VK Together</h2>
-        <input type="text" id="nickInput" placeholder="Ваш ник">
-        <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
-        
-        <button onclick="initSession('leader')">СОЗДАТЬ КОМНАТУ</button>
-        
-        <p style="color: #666; font-size: 14px;">ИЛИ</p>
-        
-        <input type="text" id="codeInput" placeholder="Код комнаты (напр. 7a2f)">
-        <button class="secondary" onclick="initSession('viewer')">ВОЙТИ ПО КОДУ</button>
+        <input type="text" id="nick" placeholder="Ваш ник">
+        <button onclick="startSession('leader')">СОЗДАТЬ КОМНАТУ</button>
+        <p style="color:#555">ИЛИ</p>
+        <input type="text" id="joinCode" placeholder="Код комнаты">
+        <button class="secondary" onclick="startSession('viewer')">ВОЙТИ ПО КОДУ</button>
     </div>
 
-    <!-- ЭКРАН 2: КОМНАТА -->
-    <div id="roomScreen" class="card" style="display:none;">
-        <div id="statusTag" class="badge">ЗРИТЕЛЬ</div>
-        <p id="welcomeMsg" style="font-size: 14px; margin-bottom: 5px;"></p>
-        <div id="roomBadge">КОД: <span id="displayCode">----</span></div>
+    <div id="app" class="card" style="display:none;">
+        <div id="roomCodeDisplay">КОД: <span id="codeText"></span></div>
+        <div id="userList"></div>
         
         <div id="leaderUI" style="display:none;">
-            <input type="text" id="videoInput" placeholder="Вставьте код iframe из ВК">
+            <input type="text" id="videoUrl" placeholder="Вставьте код iframe из ВК">
             <button onclick="updateVideo()">ЗАПУСТИТЬ У ВСЕХ</button>
         </div>
 
-        <div id="viewerUI">
-            <p id="waitText" style="font-size: 13px; color: #888;">Ожидание видео от Лидера...</p>
-            <button class="secondary" onclick="claimControl()">СТАТЬ ЛИДЕРОМ (1111)</button>
+        <div id="viewerUI" style="display:none;">
+            <p style="color: #888; font-size: 14px;">Ожидание видео от лидера...</p>
+            <button class="secondary" style="width:70%; padding:8px; font-size:12px;" onclick="claimControl()">Стать лидером (1111)</button>
         </div>
     </div>
 
     <div id="playerArea"></div>
 
     <script>
-        let myNick = "";
-        let myRole = "";
-        let currentRoom = "";
-        let lastVideo = "";
+        // ТВОИ КЛЮЧИ SUPABASE
+        const SUPABASE_URL = 'https://dbpchlkstyptecgmujlio.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGNobGtzeXB0ZWNnbXVqbGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDYzODQsImV4cCI6MjA4OTU4MjM4NH0.OtaUIt2G9IOU_bK1bvTWRaySD3EPpIfu3ikic3aHndE';
+        
+        const supabase = bootstrapSupabase();
+        function bootstrapSupabase() {
+            return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
 
-        function initSession(role) {
-            myNick = document.getElementById('nickInput').value.trim();
+        let myNick, myRole, currentRoom, lastUrl;
+
+        async function startSession(role) {
+            myNick = document.getElementById('nick').value.trim();
             if (!myNick) return alert("Введите ник!");
 
             if (role === 'leader') {
-                currentRoom = Math.random().toString(36).substring(7, 11); // Генерируем 4 знака
+                currentRoom = Math.random().toString(36).substring(7, 11);
                 myRole = 'leader';
-                localStorage.setItem('room_' + currentRoom, JSON.stringify({ video: "", leader: myNick }));
+                // Создаем запись в базе
+                await supabase.from('rooms').insert([{ id: currentRoom, leader_name: myNick, video_url: '' }]);
             } else {
-                currentRoom = document.getElementById('codeInput').value.trim().toLowerCase();
-                if (!currentRoom) return alert("Введите код комнаты!");
+                currentRoom = document.getElementById('joinCode').value.trim().toLowerCase();
+                if (!currentRoom) return alert("Введите код!");
                 myRole = 'viewer';
             }
 
-            showRoom();
+            document.getElementById('auth').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            document.getElementById('codeText').innerText = currentRoom;
+            document.getElementById('userList').innerText = "Вы: " + myNick;
+
+            if (myRole === 'leader') document.getElementById('leaderUI').style.display = 'block';
+            else document.getElementById('viewerUI').style.display = 'block';
+
+            // Проверка обновлений каждые 2 секунды
+            setInterval(syncVideo, 2000);
         }
 
-        function showRoom() {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('roomScreen').style.display = 'block';
-            document.getElementById('displayCode').innerText = currentRoom;
-            document.getElementById('welcomeMsg').innerText = "Привет, " + myNick;
-            
-            const isL = (myRole === 'leader');
-            document.getElementById('statusTag').innerText = isL ? "ЛИДЕР" : "ЗРИТЕЛЬ";
-            document.getElementById('statusTag').style.background = isL ? "#00ff88" : "#ff9500";
-            document.getElementById('leaderUI').style.display = isL ? 'block' : 'none';
-            document.getElementById('viewerUI').style.display = isL ? 'none' : 'block';
-
-            // Запускаем цикл проверки обновлений (раз в 3 секунды)
-            setInterval(syncRoom, 3000);
-        }
-
-        function updateVideo() {
-            let raw = document.getElementById('videoInput').value;
-            let clean = raw;
-            if (raw.indexOf('src="') !== -1) {
-                let start = raw.indexOf('src="') + 5;
-                let end = raw.indexOf('"', start);
-                clean = raw.substring(start, end);
+        async function updateVideo() {
+            let input = document.getElementById('videoUrl').value;
+            let url = input;
+            if (input.includes('src="')) {
+                let start = input.indexOf('src="') + 5;
+                let end = input.indexOf('"', start);
+                url = input.substring(start, end);
             }
-            if (clean && clean.indexOf('http') === -1) clean = 'https:' + clean;
+            if (url && !url.includes('http')) url = 'https:' + url;
 
-            // Сохраняем в "базу"
-            const data = { video: clean, leader: myNick };
-            localStorage.setItem('room_' + currentRoom, JSON.stringify(data));
-            render(clean);
+            await supabase.from('rooms').update({ video_url: url }).eq('id', currentRoom);
+            render(url);
         }
 
-        function syncRoom() {
-            const rawData = localStorage.getItem('room_' + currentRoom);
-            if (!rawData) return;
-            
-            const data = JSON.parse(rawData);
-            if (data.video && data.video !== lastVideo) {
-                lastVideo = data.video;
-                render(data.video);
+        async function syncVideo() {
+            const { data, error } = await supabase.from('rooms').select('video_url').eq('id', currentRoom).single();
+            if (data && data.video_url && data.video_url !== lastUrl) {
+                lastUrl = data.video_url;
+                render(data.video_url);
             }
         }
 
         function claimControl() {
-            if (prompt("Введите пароль:") === "1111") {
+            if (prompt("Пароль:") === "1111") {
                 myRole = 'leader';
-                const data = JSON.parse(localStorage.getItem('room_' + currentRoom));
-                data.leader = myNick;
-                localStorage.setItem('room_' + currentRoom, JSON.stringify(data));
-                showRoom();
+                document.getElementById('leaderUI').style.display = 'block';
+                document.getElementById('viewerUI').style.display = 'none';
             }
         }
 
         function render(url) {
             let src = url;
             if (src.indexOf('autoplay') === -1) src += (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
-            document.getElementById('playerArea').innerHTML = '<iframe src="' + src + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
-            if (document.getElementById('waitText')) document.getElementById('waitText').style.display = 'none';
+            document.getElementById('playerArea').innerHTML = `<iframe src="${src}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
         }
     </script>
 </body>
