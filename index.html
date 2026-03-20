@@ -4,8 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VK Watch Party</title>
-    <!-- Используем надежную CDN для библиотеки связи -->
-    <script src="https://cdn.jsdelivr.net"></script>
+ <!-- Подключаем сверхнадежную библиотеку связи -->
+<script src="https://cdn.pubnub.com"></script>
+<script>
+    // Создаем подключение (Бесплатные ключи для теста)
+    const pubnub = new PubNub({
+        publishKey: 'pub-c-46764724-4d8e-4a6c-9418-8f5509930f40',
+        subscribeKey: 'sub-c-10143894-3580-4547-9759-45664197368d',
+        userId: "user_" + Math.random().toString(36).substring(7)
+    });
+
+    // Комната для вас и друга (придумайте любое слово)
+    const channel = 'my_private_cinema_room_123'; 
+
+    pubnub.subscribe({ channels: [channel] });
+
+    pubnub.addListener({
+        message: function(event) {
+            if (event.message.type === 'VIDEO') {
+                showVideo(event.message.url);
+            }
+        }
+    });
+
+    function sendVideo() {
+        const url = document.getElementById('videoUrl').value;
+        if (!url) return;
+        
+        showVideo(url); // Открываем у себя
+        
+        pubnub.publish({
+            channel: channel,
+            message: { type: 'VIDEO', url: url }
+        });
+    }
+
+    function showVideo(url) {
+        let cleanUrl = url;
+        if (url.includes('src="')) {
+            cleanUrl = url.split('src="')[1].split('"')[0];
+        }
+        document.getElementById('playerContainer').innerHTML = 
+            `<iframe src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen 
+             style="width:100%; height:450px; border:none; margin-top:20px;"></iframe>`;
+    }
+
+    // Вместо ID теперь просто пишем статус
+    document.getElementById('myId').innerText = "СВЯЗЬ АКТИВНА (Комната: " + channel + ")";
+</script>
     <style>
         body { background: #121212; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
         .card { background: #1e1e1e; border-radius: 15px; padding: 15px; margin-bottom: 15px; border: 1px solid #333; }
