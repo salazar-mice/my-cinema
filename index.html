@@ -3,48 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Party Pro</title>
-    <!-- Gun.js для списка пользователей (работает P2P) -->
-    <script src="https://cdn.jsdelivr.net"></script>
+    <title>VK Together Simple</title>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 15px; margin: 0; }
+        body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 15px; margin: 0; }
         .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 450px; margin: 0 auto 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 90%; font-weight: bold; cursor: pointer; margin-top: 5px; }
+        input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; outline: none; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 90%; font-weight: bold; cursor: pointer; margin-top: 5px; -webkit-appearance: none; }
         .secondary { background: #333; margin-top: 10px; }
         iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 15px; }
-        #userList { font-size: 12px; color: #00ff88; margin-top: 10px; text-align: left; padding-left: 20px; }
-        .badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #ff9500; color: #000; font-weight: bold; }
+        #userDisplay { font-size: 13px; color: #00ff88; margin-bottom: 10px; font-weight: bold; }
+        .badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; background: #ff9500; color: #000; font-weight: bold; display: inline-block; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <!-- ЭКРАН 1: РЕГИСТРАЦИЯ -->
+    <!-- ЭКРАН 1: ВВОД НИКА -->
     <div id="regScreen" class="card">
-        <h2>Вход в комнату</h2>
-        <input type="text" id="nickname" placeholder="Введите ваш ник">
-        <button onclick="startApp()">ВОЙТИ</button>
+        <h2>VK Sync</h2>
+        <p style="color: #888; font-size: 14px;">Введите ваше имя для входа:</p>
+        <input type="text" id="nickname" placeholder="Ваш никнейм">
+        <button onclick="login()">ВОЙТИ</button>
     </div>
 
-    <!-- ЭКРАН 2: ВЫБОР РОЛИ (только если нет видео в ссылке) -->
+    <!-- ЭКРАН 2: ВЫБОР РОЛИ (только если зашли на главную) -->
     <div id="roleScreen" class="card" style="display:none;">
         <h2>Вы кто?</h2>
-        <button onclick="setRole('leader')">Я ЛИДЕР</button>
-        <button class="secondary" onclick="setRole('viewer')">Я ЗРИТЕЛЬ</button>
+        <button onclick="startSession('leader')">СОЗДАТЬ КОМНАТУ</button>
+        <button class="secondary" onclick="startSession('viewer')">СМОТРЕТЬ С ДРУГОМ</button>
     </div>
 
-    <!-- ЭКРАН 3: ГЛАВНЫЙ ИНТЕРФЕЙС -->
+    <!-- ЭКРАН 3: ПРИЛОЖЕНИЕ -->
     <div id="mainApp" class="card" style="display:none;">
+        <div id="userDisplay"></div>
         <div id="statusTag" class="badge">ЗРИТЕЛЬ</div>
-        <div id="userList"><b>В комнате:</b> <span id="users"></span></div>
         
         <div id="leaderUI" style="display:none;">
             <input type="text" id="videoInput" placeholder="Вставьте код iframe из ВК">
-            <button onclick="broadcast()">ОТКРЫТЬ У ВСЕХ</button>
+            <button onclick="generateShare()">ОТКРЫТЬ ВИДЕО У ВСЕХ</button>
         </div>
 
         <div id="viewerUI">
-            <p id="waitText">Ожидание видео...</p>
+            <p id="waitText">Ожидание ссылки от Лидера...</p>
             <button class="secondary" onclick="claimControl()">СТАТЬ ЛИДЕРОМ (1111)</button>
         </div>
     </div>
@@ -52,50 +51,55 @@
     <div id="playerArea"></div>
 
     <script>
-        const gun = Gun(['https://gun-manhattan.herokuapp.com']); // Децентрализованный узел
         const urlParams = new URLSearchParams(window.location.search);
-        let myNick = "";
-        let myRole = urlParams.get('role') || 'none';
-        let vSrc = urlParams.get('v');
+        let myNick = urlParams.get('nick') || "";
+        let myRole = urlParams.get('role') || "";
+        let vSrc = urlParams.get('v') || "";
 
-        function startApp() {
-            myNick = document.getElementById('nickname').value;
-            if (!myNick) return alert("Введите ник!");
+        // Если ник и роль уже есть в ссылке — сразу открываем приложение
+        window.onload = function() {
+            if (myNick && (myRole || vSrc)) {
+                showApp();
+            }
+        };
 
+        function login() {
+            myNick = document.getElementById('nickname').value.trim();
+            if (!myNick) return alert("Ник не может быть пустым!");
+            
             document.getElementById('regScreen').style.display = 'none';
             
-            // Если в ссылке уже есть видео, сразу идем в приложение как зритель
             if (vSrc) {
-                myRole = urlParams.get('role') || 'viewer';
-                initApp();
+                myRole = 'viewer';
+                showApp();
             } else {
                 document.getElementById('roleScreen').style.display = 'block';
             }
-
-            // Добавляем себя в список пользователей
-            gun.get('vk-room-users').get(myNick).put({ name: myNick, online: true });
-            listenUsers();
         }
 
-        function setRole(r) {
-            myRole = r;
+        function startSession(role) {
+            myRole = role;
             document.getElementById('roleScreen').style.display = 'none';
-            initApp();
+            showApp();
         }
 
-        function initApp() {
+        function showApp() {
+            document.getElementById('regScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
-            const isL = (myRole === 'leader');
+            document.getElementById('userDisplay').innerText = "Привет, " + myNick + "!";
             
+            const isL = (myRole === 'leader');
             document.getElementById('statusTag').innerText = isL ? "ЛИДЕР" : "ЗРИТЕЛЬ";
             document.getElementById('statusTag').style.background = isL ? "#00ff88" : "#ff9500";
             document.getElementById('leaderUI').style.display = isL ? 'block' : 'none';
             document.getElementById('viewerUI').style.display = isL ? 'none' : 'block';
 
-            if (vSrc) drawPlayer(decodeURIComponent(vSrc));
+            if (vSrc) {
+                drawPlayer(decodeURIComponent(vSrc));
+            }
         }
 
-        function broadcast() {
+        function generateShare() {
             let raw = document.getElementById('videoInput').value;
             let clean = raw;
             if (raw.indexOf('src="') !== -1) {
@@ -105,33 +109,26 @@
             }
             if (clean.indexOf('http') === -1) clean = 'https:' + clean;
 
-            // Генерируем ссылку СТРОГО с параметром role=viewer для друга
+            // Формируем ссылку для Зрителя (без его ника, чтобы он ввел свой)
             const finalLink = window.location.origin + window.location.pathname + 
                               '?v=' + encodeURIComponent(clean) + '&role=viewer';
             
-            alert("Скопируйте ссылку из адресной строки и отправьте другу!");
+            alert("ВИДЕО ЗАГРУЖЕНО!\n\nТеперь скопируйте ссылку из адресной строки вашего браузера и отправьте её другу.");
+            
+            // Обновляем текущую страницу для лидера
             window.location.href = window.location.origin + window.location.pathname + 
-                                  '?v=' + encodeURIComponent(clean) + '&role=leader';
-        }
-
-        function listenUsers() {
-            gun.get('vk-room-users').map().on((data, id) => {
-                const span = document.getElementById('users');
-                if (data && data.online && !span.innerText.includes(data.name)) {
-                    span.innerText += (span.innerText ? ", " : "") + data.name;
-                }
-            });
+                                  '?v=' + encodeURIComponent(clean) + '&role=leader&nick=' + encodeURIComponent(myNick);
         }
 
         function claimControl() {
-            if (prompt("Пароль:") === "1111") {
+            if (prompt("Введите пароль:") === "1111") {
                 window.location.href = window.location.origin + window.location.pathname + 
-                                      '?v=' + encodeURIComponent(vSrc || '') + '&role=leader';
+                                      '?v=' + encodeURIComponent(vSrc) + '&role=leader&nick=' + encodeURIComponent(myNick);
             }
         }
 
         function drawPlayer(url) {
-            let src = url.trim();
+            let src = url;
             if (src.indexOf('autoplay') === -1) src += (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
             document.getElementById('playerArea').innerHTML = '<iframe src="' + src + '" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
             if (document.getElementById('waitText')) document.getElementById('waitText').style.display = 'none';
