@@ -3,46 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Sync Together</title>
-<!-- Пробуем альтернативный стабильный источник библиотеки -->
-<script src="https://unpkg.com"></script>
-
-<script>
-    const SUPABASE_URL = 'https://dbpchlksyptecgmujlio.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGNobGtzeXB0ZWNnbXVqbGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDYzODQsImV4cCI6MjA4OTU4MjM4NH0.OtaUIt2G9IOU_bK1bvTWRaySD3EPpIfu3ikic3aHndE';
-    
-    let supabase;
-
-    // Пытаемся инициализировать библиотеку из разных возможных глобальных имен
-    function initSupabase() {
-        const lib = window.supabase || window['@supabase/supabase-js'];
-        if (lib && lib.createClient) {
-            supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
-            return true;
-        }
-        return false;
-    }
-
-    window.onload = () => {
-        if (!initSupabase()) {
-            // Если через 2 секунды все еще не загрузилось, пробуем еще раз
-            setTimeout(() => {
-                if (!initSupabase()) {
-                    alert("Ошибка: Библиотека все еще не доступна. Попробуйте сменить сеть (например, с Wi-Fi на мобильный интернет).");
-                }
-            }, 2000);
-        }
-    };
-
-    // Остальной код функций (startSession, updateVideo и т.д.) остается прежним
-</script>
+    <title>VK Sync Offline-Ready</title>
+    <!-- Подключаем файл, который вы только что создали в своем репозитории -->
+    <script src="supabase.js"></script>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
-        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 0 auto 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 0 auto 15px; }
         input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; outline: none; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 95%; font-weight: bold; cursor: pointer; margin-top: 5px; -webkit-appearance: none; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 95%; font-weight: bold; cursor: pointer; margin-top: 5px; }
         .secondary { background: #333; margin-top: 10px; }
-        iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 20px; }
+        iframe { width: 100%; height: 320px; border: none; border-radius: 12px; background: #000; margin-top: 20px; }
         #roomCodeDisplay { font-size: 22px; color: #00ff88; font-weight: bold; margin: 10px 0; letter-spacing: 2px; }
     </style>
 </head>
@@ -79,22 +49,26 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGNobGtzeXB0ZWNnbXVqbGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDYzODQsImV4cCI6MjA4OTU4MjM4NH0.OtaUIt2G9IOU_bK1bvTWRaySD3EPpIfu3ikic3aHndE';
         
         let supabase;
-        try {
-            // Проверяем, загрузилась ли библиотека
-            if (typeof window.supabase !== 'undefined') {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            } else {
-                alert("Ошибка: Библиотека Supabase не загружена. Попробуйте обновить страницу или выключить VPN.");
+
+        window.onload = () => {
+            try {
+                // Ищем библиотеку в глобальном пространстве имен
+                const lib = window.supabase;
+                if (lib && lib.createClient) {
+                    supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+                    console.log("Supabase подключен локально!");
+                } else {
+                    alert("Файл supabase.js не найден или пуст. Проверьте его наличие в репозитории.");
+                }
+            } catch (e) {
+                console.error(e);
             }
-        } catch (e) {
-            console.error("Ошибка инициализации:", e);
-        }
+        };
 
         let myNick, myRole, currentRoom, lastUrl;
 
         async function startSession(role) {
-            if (!supabase) return alert("Система не готова. Проверьте интернет-соединение.");
-            
+            if (!supabase) return alert("Ошибка: Библиотека не загружена.");
             myNick = document.getElementById('nick').value.trim();
             if (!myNick) return alert("Введите ник!");
 
@@ -102,8 +76,7 @@
                 if (role === 'leader') {
                     currentRoom = Math.random().toString(36).substring(7, 11);
                     myRole = 'leader';
-                    const { error } = await supabase.from('rooms').insert([{ id: currentRoom, leader_name: myNick, video_url: '' }]);
-                    if (error) throw error;
+                    await supabase.from('rooms').insert([{ id: currentRoom, leader_name: myNick, video_url: '' }]);
                 } else {
                     currentRoom = document.getElementById('joinCode').value.trim().toLowerCase();
                     if (!currentRoom) return alert("Введите код!");
@@ -120,7 +93,7 @@
 
                 setInterval(syncVideo, 2500);
             } catch (err) {
-                alert("Ошибка при входе: " + err.message + ". Убедитесь, что создали таблицу в SQL Editor!");
+                alert("Ошибка БД. Проверьте SQL Editor в Supabase!");
             }
         }
 
@@ -134,8 +107,7 @@
             }
             if (url && !url.includes('http')) url = 'https:' + url;
 
-            const { error } = await supabase.from('rooms').update({ video_url: url }).eq('id', currentRoom);
-            if (error) alert("Ошибка обновления в базе!");
+            await supabase.from('rooms').update({ video_url: url }).eq('id', currentRoom);
             render(url);
         }
 
