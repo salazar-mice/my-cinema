@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Together Sync</title>
-    <!-- Библиотека Supabase -->
+    <title>VK Sync Together</title>
+    <!-- Подключаем библиотеку Supabase правильно -->
     <script src="https://cdn.jsdelivr.net"></script>
     <style>
-        body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        body { background: #0a0a0a; color: #fff; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
         .card { background: #1a1a1a; border-radius: 15px; padding: 20px; border: 1px solid #333; max-width: 400px; margin: 0 auto 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         input { width: 85%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; font-size: 16px; outline: none; }
         button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 95%; font-weight: bold; cursor: pointer; margin-top: 5px; }
         .secondary { background: #333; margin-top: 10px; }
         iframe { width: 100%; height: 300px; border: none; border-radius: 12px; background: #000; margin-top: 20px; }
         #roomCodeDisplay { font-size: 22px; color: #00ff88; font-weight: bold; margin: 10px 0; letter-spacing: 2px; }
-        #userList { font-size: 12px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -30,7 +29,7 @@
 
     <div id="app" class="card" style="display:none;">
         <div id="roomCodeDisplay">КОД: <span id="codeText"></span></div>
-        <div id="userList"></div>
+        <div id="userList" style="font-size: 14px; color: #888;"></div>
         
         <div id="leaderUI" style="display:none;">
             <input type="text" id="videoUrl" placeholder="Вставьте код iframe из ВК">
@@ -46,14 +45,11 @@
     <div id="playerArea"></div>
 
     <script>
-        // ТВОИ КЛЮЧИ SUPABASE
-        const SUPABASE_URL = 'https://dbpchlkstyptecgmujlio.supabase.co';
+        const SUPABASE_URL = 'https://dbpchlksyptecgmujlio.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRicGNobGtzeXB0ZWNnbXVqbGlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMDYzODQsImV4cCI6MjA4OTU4MjM4NH0.OtaUIt2G9IOU_bK1bvTWRaySD3EPpIfu3ikic3aHndE';
         
-        const supabase = bootstrapSupabase();
-        function bootstrapSupabase() {
-            return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        }
+        // Исправленная инициализация
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let myNick, myRole, currentRoom, lastUrl;
 
@@ -64,8 +60,16 @@
             if (role === 'leader') {
                 currentRoom = Math.random().toString(36).substring(7, 11);
                 myRole = 'leader';
-                // Создаем запись в базе
-                await supabase.from('rooms').insert([{ id: currentRoom, leader_name: myNick, video_url: '' }]);
+                
+                // Создаем комнату в базе
+                const { error } = await supabase.from('rooms').insert([
+                    { id: currentRoom, leader_name: myNick, video_url: '' }
+                ]);
+                
+                if (error) {
+                    console.error(error);
+                    return alert("Ошибка: убедитесь, что вы создали таблицу в SQL Editor!");
+                }
             } else {
                 currentRoom = document.getElementById('joinCode').value.trim().toLowerCase();
                 if (!currentRoom) return alert("Введите код!");
@@ -77,8 +81,11 @@
             document.getElementById('codeText').innerText = currentRoom;
             document.getElementById('userList').innerText = "Вы: " + myNick;
 
-            if (myRole === 'leader') document.getElementById('leaderUI').style.display = 'block';
-            else document.getElementById('viewerUI').style.display = 'block';
+            if (myRole === 'leader') {
+                document.getElementById('leaderUI').style.display = 'block';
+            } else {
+                document.getElementById('viewerUI').style.display = 'block';
+            }
 
             // Проверка обновлений каждые 2 секунды
             setInterval(syncVideo, 2000);
@@ -87,14 +94,19 @@
         async function updateVideo() {
             let input = document.getElementById('videoUrl').value;
             let url = input;
+            
+            // Парсинг ссылки из iframe
             if (input.includes('src="')) {
                 let start = input.indexOf('src="') + 5;
                 let end = input.indexOf('"', start);
                 url = input.substring(start, end);
             }
+            
             if (url && !url.includes('http')) url = 'https:' + url;
 
-            await supabase.from('rooms').update({ video_url: url }).eq('id', currentRoom);
+            const { error } = await supabase.from('rooms').update({ video_url: url }).eq('id', currentRoom);
+            if (error) alert("Ошибка обновления!");
+            
             render(url);
         }
 
@@ -115,8 +127,10 @@
         }
 
         function render(url) {
+            if (!url) return;
             let src = url;
-            if (src.indexOf('autoplay') === -1) src += (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
+            // Добавляем параметры автоплея
+            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
             document.getElementById('playerArea').innerHTML = `<iframe src="${src}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
         }
     </script>
