@@ -3,85 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Solo Sync</title>
+    <title>VK Party Connect</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .card { background: #1a1a1a; border: 1px solid #333; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
-        input { width: 90%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; }
-        button { background: #0077ff; color: #fff; border: none; padding: 12px; border-radius: 8px; width: 95%; font-weight: bold; cursor: pointer; }
-        .btn-alt { background: #ff9500; margin-top: 10px; }
-        iframe { width: 100%; height: 400px; border: none; border-radius: 10px; margin-top: 15px; background: #000; }
-        .role-tag { font-size: 12px; color: #00ff88; text-transform: uppercase; }
+        body { background: #0b0b0b; color: #e0e0e0; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #181818; border: 1px solid #333; padding: 20px; border-radius: 16px; max-width: 500px; margin: 0 auto 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .hidden { display: none; }
+        input { width: 90%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; outline: none; }
+        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .secondary { background: #333; }
+        .role-tag { font-size: 12px; color: #00ff88; margin-bottom: 10px; font-weight: bold; }
+        #player { width: 100%; height: 350px; border-radius: 12px; background: #000; border: none; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <div id="roleDisplay" class="role-tag">Режим: Просмотр</div>
-    <input type="text" id="videoUrl" placeholder="Вставьте ссылку src из ВК">
-    <button id="mainBtn" onclick="updateVideo()">ОТКРЫТЬ ВИДЕО</button>
-    <button id="reqBtn" class="btn-alt" onclick="requestControl()" style="display:none;">ЗАПРОСИТЬ ПРАВА УПРАВЛЕНИЯ</button>
-</div>
+    <!-- ЭКРАН ВЫБОРА -->
+    <div id="startScreen" class="card">
+        <h2>VK Together</h2>
+        <button onclick="initRoom('leader')">Создать комнату (Лидер)</button>
+        <button class="secondary" onclick="document.getElementById('joinInput').classList.toggle('hidden')">Войти в комнату (Зритель)</button>
+        <div id="joinInput" class="hidden">
+            <input type="text" id="roomCodeInput" placeholder="Введите код комнаты">
+            <button onclick="initRoom('viewer')">Подключиться</button>
+        </div>
+    </div>
 
-<div id="player"></div>
-
-<script>
-    const params = new URLSearchParams(window.location.search);
-    let currentVideo = params.get('v');
-    let hasControl = !params.has('share'); // Если зашли по прямой ссылке - вы лидер
-
-    window.onload = function() {
-        if (currentVideo) {
-            render(decodeURIComponent(currentVideo));
-        }
-        updateUI();
-    };
-
-    function updateUI() {
-        const roleDisp = document.getElementById('roleDisplay');
-        const input = document.getElementById('videoUrl');
-        const reqBtn = document.getElementById('reqBtn');
-
-        if (hasControl) {
-            roleDisp.innerText = "Режим: Лидер (Управление)";
-            input.style.display = "block";
-            reqBtn.style.display = "none";
-        } else {
-            roleDisp.innerText = "Режим: Зритель";
-            input.style.display = "none";
-            document.getElementById('mainBtn').style.display = "none";
-            reqBtn.style.display = "block";
-        }
-    }
-
-    function updateVideo() {
-        let input = document.getElementById('videoUrl').value;
-        if (!input) return;
-
-        let finalUrl = input.includes('src="') ? input.split('src="').split('"') : input;
-        if (!finalUrl.includes('https:')) finalUrl = 'https:' + finalUrl;
-
-        // Генерируем ссылку для себя (Лидер) и даем ссылку для друга (Share)
-        const shareUrl = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(finalUrl) + '&share=1';
+    <!-- ИНТЕРФЕЙС УПРАВЛЕНИЯ -->
+    <div id="mainInterface" class="card hidden">
+        <div id="roleLabel" class="role-tag"></div>
+        <div id="roomInfo" style="font-size: 14px; color: #888;">Код комнаты: <b id="displayCode" style="color:white"></b></div>
         
-        alert("Видео загружено! Отправьте эту ссылку другу для совместного просмотра:\n\n" + shareUrl);
-        window.location.href = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(finalUrl);
-    }
+        <div id="leaderControls">
+            <input type="text" id="videoUrl" placeholder="Вставьте код iframe из ВК">
+            <button onclick="broadcastVideo()">ОТКРЫТЬ У ВСЕХ</button>
+        </div>
 
-    function requestControl() {
-        let code = prompt("Для получения прав введите секретный код, который видит Лидер:");
-        if (code === "1234") { // Простейшая логика передачи прав
-            hasControl = true;
-            updateUI();
-        } else {
-            alert("Неверный код!");
+        <div id="viewerControls" class="hidden">
+            <button class="secondary" onclick="requestAccess()">ЗАПРОСИТЬ УПРАВЛЕНИЕ</button>
+            <p style="font-size: 11px; color: #666;">Вы смотрите то, что включил Лидер</p>
+        </div>
+    </div>
+
+    <div id="playerContainer"></div>
+
+    <script>
+        let currentRole = '';
+        let roomCode = '';
+
+        function initRoom(role) {
+            currentRole = role;
+            if (role === 'leader') {
+                roomCode = Math.random().toString(36).substring(7);
+            } else {
+                roomCode = document.getElementById('roomCodeInput').value;
+                if (!roomCode) return alert("Введите код!");
+            }
+
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('mainInterface').classList.remove('hidden');
+            document.getElementById('displayCode').innerText = roomCode;
+            
+            updateRoleUI();
+            
+            // Если зритель зашел, проверяем нет ли уже видео в ссылке
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('v')) renderPlayer(decodeURIComponent(params.get('v')));
         }
-    }
 
-    function render(url) {
-        document.getElementById('player').innerHTML = 
-            `<iframe src="${url}&autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-    }
-</script>
+        function updateRoleUI() {
+            const isLeader = (currentRole === 'leader');
+            document.getElementById('roleLabel').innerText = isLeader ? "ВЫ — ЛИДЕР" : "ВЫ — ЗРИТЕЛЬ";
+            document.getElementById('leaderControls').classList.toggle('hidden', !isLeader);
+            document.getElementById('viewerControls').classList.toggle('hidden', isLeader);
+        }
+
+        function broadcastVideo() {
+            let input = document.getElementById('videoUrl').value;
+            // Ищем src в коде iframe
+            let match = input.match(/src="([^"]+)"/);
+            let url = match ? match[1] : input;
+
+            if (!url.includes('http')) url = 'https:' + url;
+
+            // Генерируем новую ссылку для всех
+            const syncUrl = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(url) + '&room=' + roomCode;
+            
+            alert("Видео готово! Отправьте эту ссылку зрителям:\n" + syncUrl);
+            window.location.href = syncUrl;
+        }
+
+        function requestAccess() {
+            let pass = prompt("Введите пароль Лидера (по умолчанию 0000):");
+            if (pass === "0000") {
+                currentRole = 'leader';
+                updateRoleUI();
+                alert("Права получены!");
+            }
+        }
+
+        function renderPlayer(url) {
+            // Исправление черного экрана: добавляем параметры ВК
+            let cleanUrl = url;
+            if (!cleanUrl.includes('autoplay')) cleanUrl += '&autoplay=1';
+            
+            document.getElementById('playerContainer').innerHTML = 
+                `<iframe id="player" src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        }
+
+        // Проверка при загрузке (если перешли по ссылке)
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('room')) {
+                initRoom('viewer');
+            }
+        };
+    </script>
 </body>
 </html>
