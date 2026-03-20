@@ -3,120 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VK Party Connect</title>
+    <title>VK Sync Party</title>
+    <!-- Подключаем Firebase для мгновенной синхронизации -->
+    <script src="https://www.gstatic.com"></script>
+    <script src="https://www.gstatic.com"></script>
     <style>
-        body { background: #0b0b0b; color: #e0e0e0; font-family: -apple-system, sans-serif; text-align: center; padding: 20px; margin: 0; }
-        .card { background: #181818; border: 1px solid #333; padding: 20px; border-radius: 16px; max-width: 500px; margin: 0 auto 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        body { background: #0a0a0a; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .card { background: #161616; border: 1px solid #333; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto 15px; }
         .hidden { display: none; }
-        input { width: 90%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; outline: none; }
-        button { background: #0077ff; color: #fff; border: none; padding: 14px; border-radius: 10px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .secondary { background: #333; }
-        .role-tag { font-size: 12px; color: #00ff88; margin-bottom: 10px; font-weight: bold; }
-        #player { width: 100%; height: 350px; border-radius: 12px; background: #000; border: none; margin-top: 20px; }
+        input { width: 90%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; margin: 10px 0; }
+        button { background: #0077ff; color: #fff; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 5px; }
+        #playerContainer iframe { width: 100%; height: 400px; border-radius: 10px; border: none; background: #000; margin-top: 15px; }
+        .status { font-size: 12px; color: #00ff88; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <!-- ЭКРАН ВЫБОРА -->
-    <div id="startScreen" class="card">
-        <h2>VK Together</h2>
-        <button onclick="initRoom('leader')">Создать комнату (Лидер)</button>
-        <button class="secondary" onclick="document.getElementById('joinInput').classList.toggle('hidden')">Войти в комнату (Зритель)</button>
-        <div id="joinInput" class="hidden">
-            <input type="text" id="roomCodeInput" placeholder="Введите код комнаты">
-            <button onclick="initRoom('viewer')">Подключиться</button>
-        </div>
+    <div id="authScreen" class="card">
+        <h2>VK Sync</h2>
+        <button onclick="createRoom()">Создать комнату (Лидер)</button>
+        <p>ИЛИ</p>
+        <input type="text" id="roomInput" placeholder="Код комнаты">
+        <button onclick="joinRoom()" style="background: #333;">Войти как зритель</button>
     </div>
 
-    <!-- ИНТЕРФЕЙС УПРАВЛЕНИЯ -->
-    <div id="mainInterface" class="card hidden">
-        <div id="roleLabel" class="role-tag"></div>
-        <div id="roomInfo" style="font-size: 14px; color: #888;">Код комнаты: <b id="displayCode" style="color:white"></b></div>
+    <div id="mainScreen" class="card hidden">
+        <div id="roleInfo" class="status">Роль: ...</div>
+        <div style="font-size:12px; color:#888;">Код: <b id="roomDisplay" style="color:#fff"></b></div>
         
-        <div id="leaderControls">
+        <div id="leaderUI" class="hidden">
             <input type="text" id="videoUrl" placeholder="Вставьте код iframe из ВК">
-            <button onclick="broadcastVideo()">ОТКРЫТЬ У ВСЕХ</button>
+            <button onclick="setVideo()">ЗАПУСТИТЬ У ВСЕХ</button>
         </div>
-
-        <div id="viewerControls" class="hidden">
-            <button class="secondary" onclick="requestAccess()">ЗАПРОСИТЬ УПРАВЛЕНИЕ</button>
-            <p style="font-size: 11px; color: #666;">Вы смотрите то, что включил Лидер</p>
-        </div>
+        
+        <button id="reqBtn" onclick="requestControl()" style="background:#ff9500; display:none; margin-top:10px;">Запросить управление</button>
     </div>
 
     <div id="playerContainer"></div>
 
     <script>
-        let currentRole = '';
-        let roomCode = '';
+        // БЕСПЛАТНАЯ БАЗА ДАННЫХ ДЛЯ ТЕСТА (Работает в РФ)
+        const firebaseConfig = {
+            databaseURL: "https://vksync-default-rtdb.europe-west1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-        function initRoom(role) {
-            currentRole = role;
-            if (role === 'leader') {
-                roomCode = Math.random().toString(36).substring(7);
-            } else {
-                roomCode = document.getElementById('roomCodeInput').value;
-                if (!roomCode) return alert("Введите код!");
-            }
+        let roomId = '';
+        let isLeader = false;
+        let currentUrl = '';
 
-            document.getElementById('startScreen').classList.add('hidden');
-            document.getElementById('mainInterface').classList.remove('hidden');
-            document.getElementById('displayCode').innerText = roomCode;
-            
-            updateRoleUI();
-            
-            // Если зритель зашел, проверяем нет ли уже видео в ссылке
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('v')) renderPlayer(decodeURIComponent(params.get('v')));
+        function createRoom() {
+            roomId = Math.random().toString(36).substring(7);
+            isLeader = true;
+            startApp();
         }
 
-        function updateRoleUI() {
-            const isLeader = (currentRole === 'leader');
-            document.getElementById('roleLabel').innerText = isLeader ? "ВЫ — ЛИДЕР" : "ВЫ — ЗРИТЕЛЬ";
-            document.getElementById('leaderControls').classList.toggle('hidden', !isLeader);
-            document.getElementById('viewerControls').classList.toggle('hidden', isLeader);
+        function joinRoom() {
+            roomId = document.getElementById('roomInput').value;
+            if (!roomId) return alert("Введите код!");
+            isLeader = false;
+            startApp();
         }
 
-        function broadcastVideo() {
+        function startApp() {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.remove('hidden');
+            document.getElementById('roomDisplay').innerText = roomId;
+            document.getElementById('roleInfo').innerText = isLeader ? "ВЫ — ЛИДЕР" : "ВЫ — ЗРИТЕЛЬ";
+            
+            if (isLeader) document.getElementById('leaderUI').classList.remove('hidden');
+            else document.getElementById('reqBtn').style.display = 'block';
+
+            // СЛУШАЕМ ОБНОВЛЕНИЯ В КОМНАТЕ
+            db.ref('rooms/' + roomId).on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                // Если видео изменилось - обновляем плеер
+                if (data.url && data.url !== currentUrl) {
+                    currentUrl = data.url;
+                    render(data.url);
+                }
+                
+                // Если пришел запрос на лидерство (только для лидера)
+                if (isLeader && data.requestLead && confirm("Зритель хочет стать лидером?")) {
+                    transferLead();
+                }
+
+                // Если лидерство передали нам
+                if (!isLeader && data.leaderId === 'viewer_claimed') {
+                    isLeader = true;
+                    db.ref('rooms/' + roomId).update({requestLead: false, leaderId: 'active'});
+                    startApp();
+                }
+            });
+        }
+
+        function setVideo() {
             let input = document.getElementById('videoUrl').value;
-            // Ищем src в коде iframe
-            let match = input.match(/src="([^"]+)"/);
-            let url = match ? match[1] : input;
-
+            let match = input.match(/src=["']([^"']+)["']/);
+            let url = match ? match : input;
             if (!url.includes('http')) url = 'https:' + url;
 
-            // Генерируем новую ссылку для всех
-            const syncUrl = window.location.origin + window.location.pathname + '?v=' + encodeURIComponent(url) + '&room=' + roomCode;
-            
-            alert("Видео готово! Отправьте эту ссылку зрителям:\n" + syncUrl);
-            window.location.href = syncUrl;
+            db.ref('rooms/' + roomId).update({ url: url });
         }
 
-        function requestAccess() {
-            let pass = prompt("Введите пароль Лидера (по умолчанию 0000):");
-            if (pass === "0000") {
-                currentRole = 'leader';
-                updateRoleUI();
-                alert("Права получены!");
-            }
+        function requestControl() {
+            db.ref('rooms/' + roomId).update({ requestLead: true });
+            alert("Запрос отправлен лидеру!");
         }
 
-        function renderPlayer(url) {
-            // Исправление черного экрана: добавляем параметры ВК
-            let cleanUrl = url;
-            if (!cleanUrl.includes('autoplay')) cleanUrl += '&autoplay=1';
-            
+        function transferLead() {
+            db.ref('rooms/' + roomId).update({ leaderId: 'viewer_claimed' });
+        }
+
+        function render(url) {
+            // Добавляем autoplay для синхронного старта
+            const finalUrl = url + (url.includes('?') ? '&' : '?') + 'autoplay=1';
             document.getElementById('playerContainer').innerHTML = 
-                `<iframe id="player" src="${cleanUrl}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+                `<iframe src="${finalUrl}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
         }
-
-        // Проверка при загрузке (если перешли по ссылке)
-        window.onload = function() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('room')) {
-                initRoom('viewer');
-            }
-        };
     </script>
 </body>
 </html>
